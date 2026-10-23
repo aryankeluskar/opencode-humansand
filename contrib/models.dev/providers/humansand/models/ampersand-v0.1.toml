@@ -17,3 +17,8 @@ cache = { read = 0.2, write = 0 }
 
 [cost.text.output]
 price = 5.2
+
+# Agents API (sessions + input events), not chat completions: no @opencode/ai entry point yet.
+[api.agents]
+base_url = "https://ampersand.humansand.ai/v1"
+sdk = { aisdk = "opencode-humansand", opencodeai = "none" }

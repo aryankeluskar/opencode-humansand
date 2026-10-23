@@ -2,11 +2,9 @@
 schema = 2
 name = "Ampersand v0.1"
 description = "humans& agent model served through a server-held Agents API session; tuned for long-running, tool-heavy work"
-family = "ampersand"
 open_weights = false
-# TODO(humans&): confirm before submitting.
-knowledge = "TODO"
-release_date = "TODO"
+# Release date from the launch announcement (x.com/humansand, 2026-10-20). Knowledge cutoff not published.
+release_date = "2026-10-20"
 
 [modalities]
 input = ["text"]

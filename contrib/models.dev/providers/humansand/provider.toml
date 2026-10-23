@@ -3,5 +3,4 @@ name = "humans&"
 npm = "opencode-humansand"
 opencodeai = "none"
 env = ["HUMANSAND_API_KEY"]
-api = "https://ampersand.humansand.ai/v1"
 doc = "https://ampersand.humansand.ai/docs"

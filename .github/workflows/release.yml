@@ -1,0 +1,23 @@
+# Publishes to npm when a v* tag is pushed, via npm trusted publishing (GitHub OIDC): no token, no OTP.
+# One-time setup on npmjs.com → package opencode-humansand → Settings → Trusted publishing:
+#   repository aryankeluskar/opencode-humansand, workflow release.yml, environment (leave blank).
+name: release
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - run: bun install --frozen-lockfile
+      - run: npm install -g npm@latest
+      - run: npm publish --provenance --access public

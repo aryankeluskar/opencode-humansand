@@ -9,8 +9,11 @@ export interface HumansandSettings {
   readonly baseURL?: string | undefined
   readonly headers?: Record<string, string | undefined> | undefined
   readonly fetch?: FetchFunction | undefined
-  /** Ampersand server-side compaction. Default `auto`. */
-  readonly compaction?: "auto" | "disabled" | undefined
+  /**
+   * Ampersand server-side compaction. Default `auto`. (Named to stay clear of OpenCode's own provider `compaction`
+   * setting, which configures OpenCode's client-side summarisation.)
+   */
+  readonly serverCompaction?: "auto" | "disabled" | undefined
   /** Whether the agent may finish a turn without text or a tool call. Default `true`. */
   readonly allowSilentCompletion?: boolean | undefined
   /** `sender` stamped on user messages. Default `user`. */
@@ -74,12 +77,13 @@ export function callSettings(settings: HumansandSettings, options: LanguageModel
     if (effort === undefined) warnings.push({ type: "other", message: `Unknown reasoning effort "${effortName}"; Ampersand supports "high" and "max".` })
     else if (effort !== effortName) warnings.push({ type: "compatibility", feature: "reasoningEffort", details: `"${effortName}" mapped to Ampersand "${effort}".` })
   }
-  for (const name of ["temperature", "topP", "topK", "presencePenalty", "frequencyPenalty", "seed", "stopSequences", "maxOutputTokens"] as const) {
+  // `maxOutputTokens` is ignored silently: OpenCode sends it on every primary request and Ampersand has no such knob.
+  for (const name of ["temperature", "topP", "topK", "presencePenalty", "frequencyPenalty", "seed", "stopSequences"] as const) {
     if (options[name] !== undefined) warnings.push({ type: "unsupported", feature: name })
   }
   if (options.responseFormat !== undefined && options.responseFormat.type !== "text") warnings.push({ type: "unsupported", feature: "responseFormat" })
   if (options.toolChoice !== undefined && options.toolChoice.type !== "auto") warnings.push({ type: "unsupported", feature: `toolChoice.${options.toolChoice.type}` })
-  const compaction = raw.compaction === "disabled" || settings.compaction === "disabled" ? "disabled" : "auto"
+  const compaction = raw.serverCompaction === "disabled" || settings.serverCompaction === "disabled" ? "disabled" : "auto"
   const allowSilentCompletion = typeof raw.allowSilentCompletion === "boolean" ? raw.allowSilentCompletion : (settings.allowSilentCompletion ?? true)
   const sessionMetadataRaw = record(raw.sessionMetadata)
   const sessionMetadata =

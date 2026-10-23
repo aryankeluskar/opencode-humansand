@@ -1,0 +1,5 @@
+[
+  { "text": "Hello from mock Ampersand. I will read a file now.", "calls": [{ "name": "read", "args": { "path": "/Users/aryank/Developer/opencode-humansand/e2e/project/NOTES.md" } }] },
+  { "text": "The notes say: the bridge works." },
+  { "text": "Second turn reply, still the same session." }
+]

@@ -1,0 +1,12 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugins": ["file:///Users/aryank/Developer/opencode-humansand"],
+  "providers": {
+    "humansand": {
+      "settings": {
+        "baseURL": "http://127.0.0.1:48181/v1",
+        "apiKey": "test-key"
+      }
+    }
+  }
+}

@@ -58,6 +58,8 @@ export async function* translate(stream: EventStream, ctx: TranslateContext): As
   const openText = new Set<string>()
   const openCalls = new Set<string>()
   const emittedCalls = new Set<string>()
+  // Text and tool-call parts carry the anchor themselves; the empty reasoning block is only for silent completions.
+  let carried = false
   const textId = (itemId: string, contentIndex: number) => `${itemId}:${contentIndex}`
 
   const noteSession = (id: string | undefined) => {
@@ -81,9 +83,16 @@ export async function* translate(stream: EventStream, ctx: TranslateContext): As
       ...(call === undefined ? {} : { call }),
     })
 
+  // A text part that is the last thing in the step means the turn completed; when a tool call follows, its own
+  // anchor (status `waiting`) comes later in the message and wins.
+  function* endText(id: string): Generator<LanguageModelV3StreamPart> {
+    openText.delete(id)
+    carried = true
+    yield { type: "text-end", id, providerMetadata: anchor("completed") }
+  }
+
   function* closeText(): Generator<LanguageModelV3StreamPart> {
-    for (const id of openText) yield { type: "text-end", id }
-    openText.clear()
+    for (const id of [...openText]) yield* endText(id)
   }
 
   function* emitCall(callId: string, name: string, args: unknown): Generator<LanguageModelV3StreamPart> {
@@ -94,14 +103,17 @@ export async function* translate(stream: EventStream, ctx: TranslateContext): As
     openCalls.delete(callId)
     yield { type: "tool-input-delta", id: callId, delta: input }
     yield { type: "tool-input-end", id: callId }
+    carried = true
     yield { type: "tool-call", toolCallId: callId, toolName: name, input, providerMetadata: anchor("waiting", callId) }
   }
 
   function* finish(status: Anchor["status"], usage: LanguageModelV3Usage): Generator<LanguageModelV3StreamPart> {
     yield* closeText()
-    const id = `humansand-anchor-${turn ?? "none"}`
-    yield { type: "reasoning-start", id, providerMetadata: anchor(status) }
-    yield { type: "reasoning-end", id, providerMetadata: anchor(status) }
+    if (!carried) {
+      const id = `humansand-anchor-${turn ?? "none"}`
+      yield { type: "reasoning-start", id, providerMetadata: anchor(status) }
+      yield { type: "reasoning-end", id, providerMetadata: anchor(status) }
+    }
     yield {
       type: "finish",
       finishReason: status === "waiting" ? { unified: "tool-calls", raw: "requires_action" } : { unified: "stop", raw: "completed" },
@@ -191,11 +203,7 @@ export async function* translate(stream: EventStream, ctx: TranslateContext): As
             yield* emitCall(item.call_id, item.name, item.arguments)
             break
           }
-          for (const id of [...openText]) {
-            if (!id.startsWith(`${item.id}:`)) continue
-            openText.delete(id)
-            yield { type: "text-end", id }
-          }
+          for (const id of [...openText]) if (id.startsWith(`${item.id}:`)) yield* endText(id)
           break
         }
         case "agent.session.turn.output_text.delta": {
@@ -216,16 +224,14 @@ export async function* translate(stream: EventStream, ctx: TranslateContext): As
           if (isStale(event.turn_id)) break
           const id = textId(event.item_id, event.content_index)
           if (openText.has(id)) {
-            openText.delete(id)
-            yield { type: "text-end", id }
+            yield* endText(id)
             break
           }
           // Text that arrived without deltas; emit it whole.
-          const text = event.type === "agent.session.turn.output_text.done" ? event.text : event.part.text
-          if (text.length > 0 && event.type === "agent.session.turn.output_text.done") {
+          if (event.type === "agent.session.turn.output_text.done" && event.text.length > 0) {
             yield { type: "text-start", id }
-            yield { type: "text-delta", id, delta: text }
-            yield { type: "text-end", id }
+            yield { type: "text-delta", id, delta: event.text }
+            yield* endText(id)
           }
           break
         }

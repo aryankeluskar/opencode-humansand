@@ -36,6 +36,10 @@ interface Session {
 export interface MockOptions {
   readonly apiKey?: string
   readonly script: Reply[]
+  /** Fixed port (default: random free port). */
+  readonly port?: number
+  /** Called after every request is recorded. */
+  readonly onRequest?: (request: Recorded) => void
 }
 
 export class MockAmpersand {
@@ -50,8 +54,11 @@ export class MockAmpersand {
   constructor(options: MockOptions) {
     this.script = [...options.script]
     this.apiKey = options.apiKey ?? "test-key"
-    this.server = Bun.serve({ port: 0, fetch: (request) => this.handle(request) })
+    this.onRequest = options.onRequest
+    this.server = Bun.serve({ port: options.port ?? 0, fetch: (request) => this.handle(request) })
   }
+
+  private readonly onRequest: ((request: Recorded) => void) | undefined
 
   get baseURL(): string {
     return `http://127.0.0.1:${this.server.port}/v1`
@@ -75,7 +82,9 @@ export class MockAmpersand {
     })
     const text = request.method === "GET" || request.method === "DELETE" ? "" : await request.text()
     const body = text.length ? (JSON.parse(text) as unknown) : undefined
-    this.requests.push({ method: request.method, path, headers, body })
+    const recorded: Recorded = { method: request.method, path, headers, body }
+    this.requests.push(recorded)
+    this.onRequest?.(recorded)
     if (headers.authorization !== `Bearer ${this.apiKey}`) return this.error(401, "authentication_error", "Invalid API key")
     if (headers["openai-beta"] !== "agents=v1") return this.error(400, "invalid_request", "Missing OpenAI-Beta: agents=v1 header")
 

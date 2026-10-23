@@ -1,0 +1,7 @@
+name = "humans&"
+# Agents API (server-held sessions), bridged to the AI SDK by opencode-humansand.
+npm = "opencode-humansand"
+opencodeai = "none"
+env = ["HUMANSAND_API_KEY"]
+api = "https://ampersand.humansand.ai/v1"
+doc = "https://ampersand.humansand.ai/docs"

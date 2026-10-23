@@ -28,11 +28,33 @@ const text = (value: string): InputText => ({ type: "input_text", text: value })
 const metadata = (source: string, id: string, sender: string, channel: string, extra?: Readonly<Record<string, unknown>>): EventMetadata =>
   ({ ...(extra as EventMetadata | undefined), source, id, sender, channel }) as EventMetadata
 
+/**
+ * OpenCode lowers a failed tool as plain text shaped `{"error":{"type":…,"message":…},"content":[…]}`. Recognise that
+ * shape so Ampersand receives `success: false` with the message instead of a "successful" JSON blob.
+ */
+const hostError = (value: string): string | undefined => {
+  if (!value.startsWith("{")) return undefined
+  try {
+    const parsed = JSON.parse(value) as { error?: { message?: unknown; type?: unknown }; content?: unknown }
+    if (parsed && typeof parsed === "object" && parsed.error && typeof parsed.error === "object" && typeof parsed.error.message === "string" && Array.isArray(parsed.content)) {
+      return parsed.error.message
+    }
+  } catch {
+    // not JSON
+  }
+  return undefined
+}
+
+/** OpenCode wraps chronological system messages as user text inside `<system-update>` tags. */
+export const isSystemUpdate = (text: string): boolean => /^\s*<system-update>/.test(text)
+
 /** Render a tool result output as text the way an agent would read it. */
 export function renderToolOutput(output: LanguageModelV3ToolResultOutput): { readonly text: string; readonly success: boolean } {
   switch (output.type) {
-    case "text":
-      return { text: output.value, success: true }
+    case "text": {
+      const error = hostError(output.value)
+      return error === undefined ? { text: output.value, success: true } : { text: error, success: false }
+    }
     case "json":
       return { text: JSON.stringify(output.value), success: true }
     case "error-text":
@@ -85,10 +107,12 @@ export function lowerForCreate(prompt: LanguageModelV3Prompt, stamp: Stamp, nonc
         if (!conversationStarted) system.push(message.content)
         else push("system", message.content)
         break
-      case "user":
+      case "user": {
         conversationStarted = true
-        push(stamp.sender, userText(message, warnings))
+        const body = userText(message, warnings)
+        push(isSystemUpdate(body) ? "system" : stamp.sender, body)
         break
+      }
       case "assistant": {
         conversationStarted = true
         const lines: string[] = []
@@ -152,9 +176,11 @@ export function lowerDelta(
       case "system":
         push("system", message.content)
         break
-      case "user":
-        push(stamp.sender, userText(message, warnings))
+      case "user": {
+        const body = userText(message, warnings)
+        push(isSystemUpdate(body) ? "system" : stamp.sender, body)
         break
+      }
       case "tool":
         for (const part of message.content) {
           if (part.type !== "tool-result") continue

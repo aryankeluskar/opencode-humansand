@@ -47,6 +47,30 @@ const leadingInstructions = (prompt: LanguageModelV3Prompt): string | undefined 
 
 const isGone = (error: unknown): boolean => error instanceof APICallError && (error.statusCode === 404 || error.statusCode === 410)
 
+/** `HUMANSAND_DEBUG_FILE=/path` appends one JSON line per step: the prompt shape and the chosen plan. */
+function debugDump(key: string, prompt: LanguageModelV3Prompt, stepPlan: Plan): void {
+  const file = process.env.HUMANSAND_DEBUG_FILE
+  if (!file) return
+  const shape = prompt.map((message) => ({
+    role: message.role,
+    parts:
+      message.role === "system"
+        ? [{ type: "system", chars: message.content.length }]
+        : message.content.map((part) => ({
+            type: part.type,
+            ...(part.type === "text" || part.type === "reasoning" ? { chars: part.text.length } : {}),
+            ...(part.type === "tool-call" || part.type === "tool-result" ? { id: part.toolCallId, name: part.toolName } : {}),
+            ...(part.providerOptions?.[key] === undefined ? {} : { [key]: part.providerOptions[key] }),
+          })),
+  }))
+  const line = JSON.stringify({
+    at: new Date().toISOString(),
+    plan: stepPlan.kind === "create" ? { kind: "create", reason: stepPlan.reason, messages: stepPlan.lowered.messages.length } : { kind: "continue", session: stepPlan.found.anchor.session, events: stepPlan.events.map((event) => event.type) },
+    prompt: shape,
+  })
+  import("node:fs").then((fs) => fs.appendFileSync(file, `${line}\n`)).catch(() => {})
+}
+
 const EMPTY_USAGE: LanguageModelV3Usage = {
   inputTokens: { total: undefined, noCache: undefined, cacheRead: undefined, cacheWrite: undefined },
   outputTokens: { total: undefined, text: undefined, reasoning: undefined },
@@ -212,6 +236,7 @@ export class HumansandLanguageModel implements LanguageModelV3 {
       ampersand,
     }
     warnings.push(...(stepPlan.kind === "create" ? stepPlan.lowered.warnings : stepPlan.warnings))
+    debugDump(key, options.prompt, stepPlan)
     return { prompt: options.prompt, settings, agent, agentOverrides, plan: stepPlan, stamp, nonce, warnings }
   }
 

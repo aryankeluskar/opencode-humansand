@@ -5,3 +5,4 @@ dist/
 .env
 .env.*
 *.log
+e2e/requests.jsonl

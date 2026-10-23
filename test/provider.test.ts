@@ -26,8 +26,9 @@ async function collect(stream: ReadableStream<LanguageModelV3StreamPart>): Promi
 
 const textOf = (parts: LanguageModelV3StreamPart[]) => parts.flatMap((p) => (p.type === "text-delta" ? [p.delta] : [])).join("")
 const finishOf = (parts: LanguageModelV3StreamPart[]) => parts.find((p): p is Extract<LanguageModelV3StreamPart, { type: "finish" }> => p.type === "finish")
+/** The anchor OpenCode would find: the last carrier part (text-end, tool-call or reasoning-end) of the step. */
 const anchorOf = (parts: LanguageModelV3StreamPart[]) => {
-  const part = parts.find((p) => p.type === "reasoning-end")
+  const part = [...parts].reverse().find((p) => p.type === "reasoning-end" || p.type === "tool-call" || p.type === "text-end")
   return (part && "providerMetadata" in part ? (part.providerMetadata as SharedV3ProviderMetadata)[KEY] : undefined) as Record<string, unknown> | undefined
 }
 
@@ -43,6 +44,11 @@ function assistantMessage(parts: LanguageModelV3StreamPart[]): LanguageModelV3Pr
         const existing = content[index]
         if (existing?.type === "text") content[index] = { type: "text", text: existing.text + part.delta }
       }
+    }
+    if (part.type === "text-end") {
+      const index = texts.get(part.id)
+      const existing = index === undefined ? undefined : content[index]
+      if (index !== undefined && existing?.type === "text") content[index] = { ...existing, providerOptions: part.providerMetadata }
     }
     if (part.type === "reasoning-end") content.push({ type: "reasoning", text: "", providerOptions: part.providerMetadata })
     if (part.type === "tool-call") content.push({ type: "tool-call", toolCallId: part.toolCallId, toolName: part.toolName, input: JSON.parse(part.input), providerOptions: part.providerMetadata })
@@ -69,6 +75,8 @@ describe("first step (CREATE)", () => {
     const { stream } = await model.doStream({ prompt: [{ role: "system", content: system }, user("hi")], tools })
     const parts = await collect(stream)
     expect(textOf(parts)).toBe("Hello from Ampersand")
+    // The text part carries the anchor; no empty reasoning block is needed.
+    expect(parts.some((p) => p.type === "reasoning-start")).toBe(false)
     const finish = finishOf(parts)
     expect(finish?.finishReason.unified).toBe("stop")
     expect(finish?.usage.inputTokens.total).toBeGreaterThan(0)
@@ -98,6 +106,7 @@ describe("first step (CREATE)", () => {
     const parts = await collect((await provider().doStream({ prompt: [user("do nothing")] })).stream)
     expect(textOf(parts)).toBe("")
     expect(parts.some((p) => p.type === "text-start")).toBe(false)
+    expect(parts.some((p) => p.type === "reasoning-end")).toBe(true)
     expect(anchorOf(parts)?.status).toBe("completed")
     expect(finishOf(parts)?.finishReason.unified).toBe("stop")
   })
@@ -274,14 +283,14 @@ describe("doGenerate and settings", () => {
   test("doGenerate aggregates text, tool calls and metadata", async () => {
     const provider = start([{ text: "Reading", calls: [{ name: "read", args: { path: "b" } }] }])
     const result = await provider().doGenerate({ prompt: [user("go")], tools })
-    expect(result.content.map((c) => c.type)).toEqual(["text", "tool-call", "reasoning"])
+    expect(result.content.map((c) => c.type)).toEqual(["text", "tool-call"])
     expect(result.finishReason.unified).toBe("tool-calls")
     expect((result.providerMetadata?.[KEY] as { status: string }).status).toBe("waiting")
   })
 
   test("unsupported sampling options become warnings; compaction and silent completion settings reach the agent", async () => {
     const provider = start([{ text: "x" }])
-    const model = createHumansand({ apiKey: mock.apiKey, baseURL: mock.baseURL, compaction: "disabled", allowSilentCompletion: false })()
+    const model = createHumansand({ apiKey: mock.apiKey, baseURL: mock.baseURL, serverCompaction: "disabled", allowSilentCompletion: false })()
     const { stream } = await model.doStream({ prompt: [user("x")], temperature: 0.2, toolChoice: { type: "required" } })
     const parts = await collect(stream)
     const startPart = parts[0] as Extract<LanguageModelV3StreamPart, { type: "stream-start" }>

@@ -42,7 +42,9 @@ export function plan(input: PlanInput): Plan {
     return { kind: "create", lowered: lowerForCreate(input.prompt, input.stamp, input.nonce), orphan: found.anchor, reason: "agent-changed" }
   }
   const anchor = found.anchor
-  const scope = `${anchor.session}:${anchor.turn}`
+  // The nonce is per attempt on purpose: Ampersand treats a repeated Idempotency-Key (or a repeated message id with the
+  // same content) as "no new work", which would leave a host retry waiting on a turn that never starts.
+  const scope = `${anchor.session}:${anchor.turn}:${input.nonce}`
   const delta = lowerDelta(
     input.prompt,
     found.index,

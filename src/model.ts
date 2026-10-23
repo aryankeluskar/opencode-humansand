@@ -65,20 +65,31 @@ export class HumansandLanguageModel implements LanguageModelV3 {
   async doStream(options: LanguageModelV3CallOptions): Promise<LanguageModelV3StreamResult> {
     const prepared = this.prepare(options)
     const started = await this.start(prepared, options.abortSignal)
-    const key = this.config.key
     const client = this.config.client
+    let finished = false
+    let cancelled = false
+    let sessionId = started.session
+    // Stop the Ampersand turn when the host goes away mid-step (stream cancel or abort signal), so it does not keep
+    // spending credit. The cancel request deliberately ignores the (already aborted) caller signal.
+    const cancelTurn = async () => {
+      if (cancelled || finished || !sessionId) return
+      cancelled = true
+      await client.postEvents(sessionId, [{ type: "agent.session.input.cancel" }], undefined).catch(() => {})
+    }
+    options.abortSignal?.addEventListener("abort", () => void cancelTurn(), { once: true })
     const parts = translate(started.stream, {
       client,
-      key,
+      key: this.config.key,
       agent: prepared.agent,
       effort: prepared.settings.effort,
       session: started.session,
       answered: started.answered,
       staleTurn: started.staleTurn,
       contextUsage: this.config.settings.contextUsage ?? true,
+      onSession: (id) => {
+        sessionId = id
+      },
     })
-    let settled = false
-    let sessionId = started.session
     const readable = new ReadableStream<LanguageModelV3StreamPart>({
       start(controller) {
         controller.enqueue({ type: "stream-start", warnings: prepared.warnings })
@@ -86,22 +97,18 @@ export class HumansandLanguageModel implements LanguageModelV3 {
       async pull(controller) {
         const next = await parts.next()
         if (next.done) {
-          settled = true
           controller.close()
           return
         }
         const part = next.value
-        if (part.type === "finish" || part.type === "error") settled = true
-        if (part.type === "reasoning-start" || part.type === "tool-call" || part.type === "finish") {
-          const meta = part.providerMetadata?.[key] as { session?: string } | undefined
-          if (meta?.session) sessionId = meta.session
-        }
+        if (part.type === "finish" || part.type === "error") finished = true
         controller.enqueue(part)
       },
       async cancel() {
-        // The host went away mid-turn (user abort). Stop the Ampersand turn so it does not keep spending credit.
+        // Close the SSE read first so the generator can unwind, then stop the turn.
+        started.stream.close()
         await parts.return(undefined).catch(() => {})
-        if (!settled && sessionId) await client.postEvents(sessionId, [{ type: "agent.session.input.cancel" }], undefined).catch(() => {})
+        await cancelTurn()
       },
     })
     return { stream: readable, request: { body: started.request }, response: { headers: started.stream.headers } }

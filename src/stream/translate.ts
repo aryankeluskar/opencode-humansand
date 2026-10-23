@@ -17,6 +17,8 @@ export interface TranslateContext {
   readonly staleTurn: string | undefined
   /** Skip `GET /context` (saves one API request per step). */
   readonly contextUsage: boolean
+  /** Called as soon as the session id is known (immediately for CONTINUE, on `agent.session.created` for CREATE). */
+  readonly onSession?: (sessionId: string) => void
 }
 
 export interface StepOutcome {
@@ -59,7 +61,9 @@ export async function* translate(stream: EventStream, ctx: TranslateContext): As
   const textId = (itemId: string, contentIndex: number) => `${itemId}:${contentIndex}`
 
   const noteSession = (id: string | undefined) => {
-    if (id !== undefined && id.length > 0) session = id
+    if (id === undefined || id.length === 0 || id === session) return
+    session = id
+    ctx.onSession?.(id)
   }
   const isStale = (turnId: string | undefined) => turnId !== undefined && turnId === ctx.staleTurn
   const noteTurn = (turnId: string | undefined) => {
@@ -119,7 +123,7 @@ export async function* translate(stream: EventStream, ctx: TranslateContext): As
     session === undefined || turn === undefined ? undefined : { session, turn, status }
 
   try {
-    for await (const event of stream.events as AsyncIterable<ServerEvent>) {
+    for await (const event of iterate(stream)) {
       if (isSessionEvent(event)) {
         noteSession(event.session.id)
         if (event.type === "agent.session.failed") {
@@ -234,11 +238,23 @@ export async function* translate(stream: EventStream, ctx: TranslateContext): As
           break
       }
     }
+    // Closed by the consumer (abort): end quietly.
+    if (stream.signal.aborted) return undefined
     // Stream ended without a terminal event (server closed the connection). Let the host retry.
     yield* closeText()
     yield { type: "error", error: streamFailure(stream.url, "event stream ended before the turn settled", "stream_ended") }
     return undefined
   } finally {
     stream.close()
+  }
+}
+
+/** Iterate the SSE events; a transport failure after the consumer closed the stream is not an error. */
+async function* iterate(stream: EventStream): AsyncGenerator<ServerEvent> {
+  try {
+    for await (const event of stream.events) yield event
+  } catch (error) {
+    if (stream.signal.aborted) return
+    throw error
   }
 }

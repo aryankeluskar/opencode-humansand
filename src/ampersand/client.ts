@@ -26,6 +26,8 @@ export interface EventStream {
   readonly url: string
   readonly headers: Record<string, string>
   readonly events: AsyncGenerator<ServerEvent>
+  /** Aborted once `close` was called (or the caller's signal fired). */
+  readonly signal: AbortSignal
   readonly close: () => void
 }
 
@@ -111,6 +113,7 @@ export function createClient(config: ClientConfig): Client {
       url,
       headers: headerRecord(response.headers),
       events,
+      signal: controller.signal,
       close: () => {
         signal?.removeEventListener("abort", onOuter)
         controller.abort()

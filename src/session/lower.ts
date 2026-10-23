@@ -126,7 +126,7 @@ export interface Delta {
   readonly answered: string[]
 }
 
-/** Lower only what came after the anchor message. Ids are deterministic so a host retry is deduplicated server-side. */
+/** Lower only what came after the anchor message. Ids are derived from `scope`, which the planner makes unique per attempt. */
 export function lowerDelta(
   prompt: LanguageModelV3Prompt,
   after: number,

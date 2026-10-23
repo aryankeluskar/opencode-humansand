@@ -65,9 +65,11 @@ in it (host retry with no new input) sends a system `Continue.` nudge rather tha
 CREATE payload = `POST /agents/sessions` with the whole prompt lowered to Ampersand `role: user` messages:
 leading system messages become `agent.instructions`; user text as-is (`sender` from options, default `user`;
 `<system-update>` wrappers get `sender: "system"`); assistant text → `sender: "assistant"`; assistant tool calls →
-`sender: "assistant"` text `Called <name> with <json>`; tool results → `sender: "tool"`. Replay is tagged
-`metadata.source = "opencode-humansand/replay"` so Ampersand's `(source,id)` dedupe can never 409 against live
-messages. Oversized tool outputs are truncated (200 KiB each), then the oldest messages dropped with a marker, to fit
+`sender: "assistant"` text `Called <name> with <json>`; tool results → `sender: "tool"`. History (everything up to
+the last assistant or tool message) is tagged `metadata.source = "opencode-humansand/replay"` so Ampersand's
+`(source,id)` dedupe can never 409 against live messages; the messages after it are this step's live input and carry
+the normal source. Ampersand shows metadata to the model, and a live request tagged as a replay reads to it as an
+injected event (v0.1.0 did this and the model declined such prompts). Oversized tool outputs are truncated (200 KiB each), then the oldest messages dropped with a marker, to fit
 the 4 MiB request cap. When an old anchor exists, the old Ampersand session is deleted after the new one is created
 (keeps the 10k-session cap and billing clean).
 

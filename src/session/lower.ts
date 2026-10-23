@@ -96,12 +96,21 @@ export function lowerForCreate(prompt: LanguageModelV3Prompt, stamp: Stamp, nonc
   const system: string[] = []
   let n = 0
   let conversationStarted = false
+  // Everything up to the last assistant/tool message is history being replayed; what follows is the live input for
+  // this step. Ampersand shows message metadata to the model, and a live request tagged as a replay reads as an
+  // injected or replayed event (the model declines it), so only history carries REPLAY_SOURCE.
+  let lastHistory = -1
+  prompt.forEach((message, index) => {
+    if (message.role === "assistant" || message.role === "tool") lastHistory = index
+  })
+  let source = REPLAY_SOURCE
   const push = (sender: string, body: string) => {
     if (body.length === 0) return
     n += 1
-    messages.push({ role: "user", content: [text(body)], metadata: metadata(REPLAY_SOURCE, `${nonce}-${n}`, sender, stamp.channel, stamp.extra) })
+    messages.push({ role: "user", content: [text(body)], metadata: metadata(source, `${nonce}-${n}`, sender, stamp.channel, stamp.extra) })
   }
-  for (const message of prompt) {
+  for (const [index, message] of prompt.entries()) {
+    source = index > lastHistory ? LIVE_SOURCE : REPLAY_SOURCE
     switch (message.role) {
       case "system":
         if (!conversationStarted) system.push(message.content)

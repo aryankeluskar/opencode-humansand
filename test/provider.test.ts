@@ -96,7 +96,8 @@ describe("first step (CREATE)", () => {
     expect(body.agent.ampersand).toEqual({ compaction: "auto", allow_silent_completion: true })
     expect(body.input[0]!.metadata.sender).toBe("user")
     expect(body.input[0]!.metadata.channel).toBe("opencode")
-    expect(body.input[0]!.metadata.source).toBe("opencode-humansand/replay")
+    // The first step has no history: the message is live input, not a replay.
+    expect(body.input[0]!.metadata.source).toBe("opencode-humansand")
     expect(create!.headers["openai-beta"]).toBe("agents=v1")
     expect(mock.requests.some((r) => r.path.endsWith("/context"))).toBe(true)
   })
@@ -231,6 +232,8 @@ describe("following steps (CONTINUE)", () => {
       ["assistant", "a"],
       ["user", "two"],
     ])
+    // History is tagged as a replay; the new message that triggered this step is live.
+    expect(replay.map((m) => m.metadata.source)).toEqual(["opencode-humansand/replay", "opencode-humansand/replay", "opencode-humansand"])
     expect(anchorOf(step2)?.session).not.toBe(oldSession)
     await Bun.sleep(20)
     expect(mock.requests.some((r) => r.method === "DELETE" && r.path === `/agents/sessions/${oldSession}`)).toBe(true)

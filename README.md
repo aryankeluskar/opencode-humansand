@@ -23,7 +23,7 @@ opencode run -m humansand/ampersand-v0.1 "what's in this repo?"
 
 ## Status
 
-- v0.1.0. Verified against a mock of the Agents API (26 tests), end to end inside OpenCode 2.1.3, and against the
+- v0.1.0. Verified against a mock of the Agents API (23 tests), end to end inside OpenCode 2.1.3, and against the
   live API (2026-10-22): session create, parallel tool calls, tool results posted as events, cancel of a waiting
   turn before new input, continued turns that rely on server-side memory, usage and cost.
 - If something differs from the published API reference, open an issue with `HUMANSAND_DEBUG_FILE` and

@@ -81,7 +81,9 @@ export function ampersandModel(): Model.Info {
     ],
     status: "beta",
     enabled: true,
-    limit: { context: 1_000_000, output: 32_768 },
+    // Hosted limits (docs/GUIDES "Input limits"): 241,664 input tokens at high effort + 16,384 output, or 225,280 +
+    // 32,768 at max, i.e. a 258,048-token model context. Output is the max-effort per-call ceiling.
+    limit: { context: 258_048, output: 32_768 },
   }
 }
 

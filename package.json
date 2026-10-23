@@ -1,6 +1,6 @@
 {
   "name": "opencode-humansand",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "humans& Ampersand (ampersand-v0.1) for OpenCode and the AI SDK: server-held Agents-API sessions bridged to stateless model calls.",
   "license": "MIT",
   "type": "module",

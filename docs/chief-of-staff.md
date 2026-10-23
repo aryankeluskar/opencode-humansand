@@ -19,10 +19,16 @@ export HUMANSAND_API_KEY=...   # from https://ampersand.humansand.ai
 
 Pick the model in the TUI, or `opencode run -m humansand/ampersand-v0.1 "..."`.
 
+The key must be visible to OpenCode's background service, which does not inherit your shell. Either pass it in the
+config (`providers.humansand.settings.apiKey: "{file:~/.config/opencode/humansand.key}"`) or run with
+`--standalone`.
+
 ## 2. The agent
 
 Save as `.opencode/agents/chief-of-staff.md` (project) or `~/.config/opencode/agents/chief-of-staff.md` (global). The
-frontmatter is OpenCode's agent format; the body is the system prompt.
+frontmatter is OpenCode's agent format; the body is the system prompt. In the TUI, `shift+tab` switches to it. From the
+CLI, `opencode run --agent chief-of-staff -m humansand/ampersand-v0.1 "..."` (OpenCode 2.1.3's `run` takes the
+model from `-m` or the default, not from the agent).
 
 ```markdown
 ---
@@ -78,7 +84,7 @@ on `ask`, while read-only tools and delegation are free.
   The bridge only sends what is new since the last step.
 - OpenCode's own compaction still runs on its own schedule. When it does, the server-side session is replaced by a
   new one seeded from OpenCode's summary. Ampersand's server-side compaction (`serverCompaction: "auto"`, the
-  default) keeps the Ampersand session itself within its 1M-token window, so the usual case is that OpenCode's
+  default) keeps the Ampersand session itself within its ~258k-token window (241,664 input tokens at high effort), so the usual case is that OpenCode's
   context meter (fed from Ampersand's own count) stays well under the limit.
 - Reasoning effort is `high` by default and `max` on request (`opencode run -m humansand/ampersand-v0.1#xhigh`
   maps to `max`). Effort changes apply to the same session.

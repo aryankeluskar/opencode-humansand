@@ -14,7 +14,8 @@ provider lands.
 
 Facts and sources:
 
-- Pricing $1 / $0.20 cached / $5.20 per million tokens, 1M context, reasoning effort `high` (default) and `max`,
+- Pricing $1 / $0.20 cached / $5.20 per million tokens, 258,048-token context (241,664 input at high effort +
+  16,384 output; 225,280 + 32,768 at max), reasoning effort `high` (default) and `max`,
   tools frozen per session, no reasoning text returned: https://ampersand.humansand.ai/docs
 - Lab file `models/humansand/ampersand-v0.1.toml`; provider overrides in
   `providers/humansand/models/ampersand-v0.1.toml`.

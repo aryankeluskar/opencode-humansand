@@ -9,5 +9,5 @@ Copy these files into a checkout of `sst/models.dev` at the same paths, then:
 4. Open the PR.
 
 Sources used for the numbers: the Ampersand API reference and model card at https://ampersand.humansand.ai/docs
-(pricing $1 / $0.20 cached / $5.20 per million tokens; 1M context; reasoning effort `high` and `max`; tools frozen
+(pricing $1 / $0.20 cached / $5.20 per million tokens; 258,048-token context (241,664 input at high effort); reasoning effort `high` and `max`; tools frozen
 per session; no reasoning text returned; text-only input in this bridge).

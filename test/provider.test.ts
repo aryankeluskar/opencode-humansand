@@ -140,6 +140,8 @@ describe("following steps (CONTINUE)", () => {
     const step2 = await collect((await model.doStream({ prompt: [...prompt, assistant, toolMessage], tools })).stream)
     expect(textOf(step2)).toBe("a.txt says hi")
     expect(finishOf(step2)?.finishReason.unified).toBe("stop")
+    // The API replays item.done for the answered call; it must not come back as a new tool call.
+    expect(step2.some((p) => p.type === "tool-call" || p.type === "tool-input-start")).toBe(false)
     const creates = mock.requests.filter((r) => r.method === "POST" && r.path === "/agents/sessions")
     expect(creates).toHaveLength(1)
     const post = mock.requests.find((r) => r.method === "POST" && r.path.endsWith("/events"))!
@@ -190,9 +192,13 @@ describe("following steps (CONTINUE)", () => {
     const step2 = await collect((await model.doStream({ prompt: [...prompt, assistantMessage(step1), user("no, don't")], tools })).stream)
     expect(textOf(step2)).toBe("ok, skipping")
     expect(finishOf(step2)?.finishReason.unified).toBe("stop")
-    const post = mock.requests.find((r) => r.method === "POST" && r.path.endsWith("/events"))!
-    const types = (post.body as { events: Array<{ type: string }> }).events.map((e) => e.type)
-    expect(types).toEqual(["agent.session.input.cancel", "agent.session.input.message"])
+    // The cancel goes alone (the API refuses input until the turn's terminal event), then the message.
+    const posts = mock.requests.filter((r) => r.method === "POST" && r.path.endsWith("/events"))
+    expect(posts.map((p) => (p.body as { events: Array<{ type: string }> }).events.map((e) => e.type))).toEqual([
+      ["agent.session.input.cancel"],
+      ["agent.session.input.message"],
+    ])
+    expect(posts[1]!.headers["idempotency-key"]).toBeDefined()
     // the cancelled turn's events must not have produced a finish
     expect(step2.filter((p) => p.type === "finish")).toHaveLength(1)
   })

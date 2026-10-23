@@ -291,12 +291,46 @@ export class HumansandLanguageModel implements LanguageModelV3 {
       throw error
     }
     try {
-      await client.postEvents(session, step.events, step.idempotencyKey, signal)
+      // A cancel cannot share a batch with new input: the API answers 409 until the cancelled turn reaches its
+      // terminal event. Post it alone, wait for that event on the stream we already hold, then post the rest.
+      const cancelFirst = step.events[0]?.type === "agent.session.input.cancel"
+      const rest = cancelFirst ? step.events.slice(1) : step.events
+      if (cancelFirst) {
+        const accepted = await client
+          .postEvents(session, [{ type: "agent.session.input.cancel" }], undefined, signal)
+          .then(() => true)
+          .catch((error: unknown) => {
+            // Nothing to cancel any more (turn already settled): carry on with the input.
+            if (error instanceof APICallError && error.statusCode !== undefined && error.statusCode < 500 && !isGone(error)) return false
+            throw error
+          })
+        if (accepted) await awaitTurnEnd(stream, step.found.anchor.turn, CANCEL_WAIT_MS)
+      }
+      if (rest.length > 0) await client.postEvents(session, rest, step.idempotencyKey, signal)
     } catch (error) {
       stream.close()
       if (isGone(error)) return undefined
       throw error
     }
     return { stream, request: { session, events: step.events } }
+  }
+}
+
+const CANCEL_WAIT_MS = 30_000
+
+/** Consume events until `turnId` reaches a terminal state (or the session goes idle), with a time cap. */
+async function awaitTurnEnd(stream: EventStream, turnId: string, maxMs: number): Promise<void> {
+  const deadline = Date.now() + maxMs
+  while (Date.now() < deadline) {
+    let handle: ReturnType<typeof setTimeout> | undefined
+    const timer = new Promise<"timeout">((resolve) => {
+      handle = setTimeout(() => resolve("timeout"), Math.max(0, deadline - Date.now()))
+    })
+    const next = await Promise.race([stream.events.next(), timer]).finally(() => clearTimeout(handle))
+    if (next === "timeout") return
+    if (next.done) return
+    const event = next.value
+    if (event.type === "agent.session.idle" || event.type === "agent.session.failed") return
+    if ("turn_id" in event && event.turn_id === turnId && /^agent\.session\.turn\.(cancelled|completed|failed)$/.test(event.type)) return
   }
 }

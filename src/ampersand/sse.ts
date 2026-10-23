@@ -1,6 +1,13 @@
 import { EventSourceParserStream } from "@ai-sdk/provider-utils"
 import type { ServerEvent } from "./types.js"
 
+/** `HUMANSAND_TRACE_FILE=/path` appends every raw server event (one JSON line each) for diagnosing API differences. */
+const trace = (data: string): void => {
+  const file = process.env.HUMANSAND_TRACE_FILE
+  if (!file) return
+  import("node:fs").then((fs) => fs.appendFileSync(file, `${data}\n`)).catch(() => {})
+}
+
 /**
  * Turn an SSE response body into parsed Ampersand events. Empty frames, keep-alive comments, and `[DONE]` are
  * dropped. A frame that is not JSON becomes an `error`-typed event with the raw text so the consumer can fail with
@@ -34,6 +41,7 @@ export async function* readServerEvents(body: ReadableStream<Uint8Array>, signal
       if (typeof parsed !== "object" || parsed === null || typeof (parsed as { type?: unknown }).type !== "string") {
         continue
       }
+      trace(data)
       yield parsed as ServerEvent
     }
   } finally {

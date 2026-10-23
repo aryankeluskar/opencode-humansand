@@ -79,6 +79,19 @@ export function createClient(config: ClientConfig): Client {
     path: string,
     init: { body?: unknown; headers?: Record<string, string | undefined>; signal?: AbortSignal | undefined; stream?: boolean },
   ): Promise<Response> => {
+    const response = await rawRequest(method, path, init)
+    if (!response.ok) {
+      const body = await response.text().catch(() => "")
+      throw httpError({ url: `${baseURL}${path}`, status: response.status, headers: headerRecord(response.headers), body, requestBody: init.body })
+    }
+    return response
+  }
+
+  const rawRequest = async (
+    method: "GET" | "POST" | "DELETE",
+    path: string,
+    init: { body?: unknown; headers?: Record<string, string | undefined>; signal?: AbortSignal | undefined; stream?: boolean },
+  ): Promise<Response> => {
     const url = `${baseURL}${path}`
     const merged = headers({
       ...(init.body === undefined ? {} : { "content-type": "application/json" }),
@@ -96,18 +109,39 @@ export function createClient(config: ClientConfig): Client {
     } catch (cause) {
       throw transportError(url, cause, `${method} ${path}`)
     }
-    if (!response.ok) {
-      const body = await response.text().catch(() => "")
-      throw httpError({ url, status: response.status, headers: headerRecord(response.headers), body, requestBody: init.body })
-    }
     return response
   }
 
-  const toEventStream = (url: string, response: Response, signal: AbortSignal | undefined): EventStream => {
-    if (!response.body) throw transportError(url, new Error("Empty SSE response body"), "stream")
+  /**
+   * Open an SSE request. The fetch itself runs on a controller owned by the returned stream, so `close()` aborts the
+   * connection (not just a reader), which is what releases the socket once the step is done.
+   */
+  const openStream = async (
+    method: "GET" | "POST",
+    path: string,
+    init: { body?: unknown; signal?: AbortSignal | undefined },
+  ): Promise<EventStream> => {
+    const url = `${baseURL}${path}`
     const controller = new AbortController()
-    const onOuter = () => controller.abort(signal?.reason)
-    signal?.addEventListener("abort", onOuter, { once: true })
+    const onOuter = () => controller.abort(init.signal?.reason)
+    init.signal?.addEventListener("abort", onOuter, { once: true })
+    const requestInit = { ...(init.body === undefined ? {} : { body: init.body }), signal: controller.signal, stream: true }
+    let response: Response
+    try {
+      response = await rawRequest(method, path, requestInit)
+    } catch (error) {
+      init.signal?.removeEventListener("abort", onOuter)
+      throw error
+    }
+    if (!response.ok) {
+      const body = await response.text().catch(() => "")
+      init.signal?.removeEventListener("abort", onOuter)
+      throw httpError({ url, status: response.status, headers: headerRecord(response.headers), body, requestBody: init.body })
+    }
+    if (!response.body) {
+      init.signal?.removeEventListener("abort", onOuter)
+      throw transportError(url, new Error("Empty SSE response body"), "stream")
+    }
     const events = readServerEvents(response.body, controller.signal)
     return {
       url,
@@ -115,7 +149,7 @@ export function createClient(config: ClientConfig): Client {
       events,
       signal: controller.signal,
       close: () => {
-        signal?.removeEventListener("abort", onOuter)
+        init.signal?.removeEventListener("abort", onOuter)
         controller.abort()
       },
     }
@@ -125,16 +159,8 @@ export function createClient(config: ClientConfig): Client {
 
   return {
     baseURL,
-    createSessionStream: async (body, signal) => {
-      const path = "/agents/sessions"
-      const response = await request("POST", path, { body: { ...body, stream: true }, signal, stream: true })
-      return toEventStream(`${baseURL}${path}`, response, signal)
-    },
-    openEvents: async (sessionId, signal) => {
-      const path = `/agents/sessions/${encodeURIComponent(sessionId)}/events`
-      const response = await request("GET", path, { signal, stream: true })
-      return toEventStream(`${baseURL}${path}`, response, signal)
-    },
+    createSessionStream: (body, signal) => openStream("POST", "/agents/sessions", { body: { ...body, stream: true }, signal }),
+    openEvents: (sessionId, signal) => openStream("GET", `/agents/sessions/${encodeURIComponent(sessionId)}/events`, { signal }),
     postEvents: async (sessionId, events, idempotencyKey, signal) => {
       await request("POST", `/agents/sessions/${encodeURIComponent(sessionId)}/events`, {
         body: { events },

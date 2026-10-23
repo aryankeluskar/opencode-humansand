@@ -31,6 +31,7 @@ interface Session {
   metadata: Record<string, string>
   effort: string | null | undefined
   deleted: boolean
+  cancelling: boolean
 }
 
 export interface MockOptions {
@@ -128,6 +129,10 @@ export class MockAmpersand {
       }
       const events = (body as { events: InputEvent[] }).events
       if (!Array.isArray(events) || events.length === 0 || events.length > 256) return this.error(400, "invalid_request", "events must have 1-256 items")
+      // Like the live API: a cancel is asynchronous, and no other input is accepted until the turn's terminal event.
+      if (session.cancelling || (events.some((e) => e.type === "agent.session.input.cancel") && events.length > 1)) {
+        return this.error(409, "invalid_request_error", "The current turn is being cancelled; wait for its terminal event")
+      }
       queueMicrotask(() => this.apply(session, events))
       return new Response(null, { status: 202 })
     }
@@ -168,6 +173,7 @@ export class MockAmpersand {
       metadata: body.metadata ?? {},
       effort: body.agent.reasoning?.effort,
       deleted: false,
+      cancelling: false,
     }
     this.sessions.set(session.id, session)
     const input: InputMessage[] = typeof body.input === "string" ? [{ role: "user", content: [{ type: "input_text", text: body.input }] }] : [...body.input]
@@ -213,15 +219,17 @@ export class MockAmpersand {
     for (const event of events) {
       if (event.type === "agent.session.input.cancel") {
         const turnId = session.currentTurn
-        if (turnId) {
-          const turn = session.turns.get(turnId)
-          if (turn && (turn.status === "waiting" || turn.status === "in_progress")) {
+        const turn = turnId ? session.turns.get(turnId) : undefined
+        if (turnId && turn && (turn.status === "waiting" || turn.status === "in_progress")) {
+          session.cancelling = true
+          setTimeout(() => {
             turn.status = "cancelled"
             session.required = []
             session.status = "idle"
+            session.cancelling = false
             this.emit(session, { type: "agent.session.turn.cancelled", turn_id: turnId, turn: { id: turnId, session_id: session.id, status: "cancelled", usage: turn.usage } })
             this.emit(session, { type: "agent.session.idle", session: this.resource(session) })
-          }
+          }, 15)
         }
         continue
       }
@@ -230,6 +238,14 @@ export class MockAmpersand {
         if (!turn || !turn.calls.has(event.call_id)) throw new Error(`mock: tool_result for unknown ${event.turn_id}/${event.call_id}`)
         session.history.push({ kind: "tool_result", turn: event.turn_id, call: event.call_id, success: event.success, output: typeof event.output === "string" ? event.output : (event.error ?? null) })
         session.required = session.required.filter((action) => action.call_id !== event.call_id)
+        // Like the live API: the call item is reported done once its result arrives.
+        const call = turn.calls.get(event.call_id)!
+        this.emit(session, {
+          type: "agent.session.turn.item.done",
+          turn_id: event.turn_id,
+          output_index: 0,
+          item: { id: this.id("fc"), type: "function_call", turn_id: event.turn_id, call_id: event.call_id, name: call.name, arguments: call.args, status: "completed" },
+        })
         this.emit(session, {
           type: "agent.session.turn.item.added",
           turn_id: event.turn_id,

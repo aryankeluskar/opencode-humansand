@@ -21,11 +21,11 @@ opencode run -m humansand/ampersand-v0.1 "what's in this repo?"
 
 ## Status
 
-- v0.1.0. Verified against a faithful mock of the Agents API (19 tests) and end to end inside OpenCode 2.1.3
-  (session create, tool round trips, continued turns, usage and cost).
-- Not yet validated against the live API: humans& accounts were not available when this was built. The first live
-  run is the next thing to do; if something differs from the published API reference, open an issue with
-  `HUMANSAND_DEBUG_FILE` output (see Debugging).
+- v0.1.0. Verified against a mock of the Agents API (19 tests), end to end inside OpenCode 2.1.3, and against the
+  live API (2026-10-22): session create, parallel tool calls, tool results posted as events, cancel of a waiting
+  turn before new input, continued turns that rely on server-side memory, usage and cost.
+- If something differs from the published API reference, open an issue with `HUMANSAND_DEBUG_FILE` and
+  `HUMANSAND_TRACE_FILE` output (see Debugging).
 
 ## Setup
 
@@ -153,6 +153,9 @@ rationale are in [docs/chief-of-staff.md](./docs/chief-of-staff.md).
 
 `HUMANSAND_DEBUG_FILE=/path/to/log.jsonl` appends one line per step with the prompt shape (roles, part types, anchors)
 and the chosen plan (create or continue, and which events were posted). No message text is written.
+`HUMANSAND_TRACE_FILE=/path/to/trace.jsonl` appends every raw server event (this does include message text).
+
+`bun --env-file=.env e2e/live.ts` runs a four-step smoke test against the live API.
 
 ## Development
 

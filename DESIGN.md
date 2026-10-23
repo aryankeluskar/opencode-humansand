@@ -82,6 +82,9 @@ attempt is still protected, and a retry is new work. The cost is a possible dupl
 
 1. (`effort` changed) `POST /agents/sessions/{id}` with `agent.reasoning.effort`.
 2. `GET /agents/sessions/{id}/events` (SSE). Wait for response headers so no event is missed.
+2b. (anchor turn `waiting`, no tool results in the delta) `POST` a lone `agent.session.input.cancel`, then read the
+   stream until that turn's terminal event (capped at 30 s). The live API answers 409 to any input batched with,
+   or posted during, a cancel.
 3. `POST /agents/sessions/{id}/events` with `Idempotency-Key`.
 4. Read SSE until one of: `agent.session.requires_action` listing call_ids we did not just answer → finish
    `tool-calls`; `agent.session.turn.completed` → finish `stop`; `turn.failed` / `agent.session.failed` / `error`
@@ -98,8 +101,8 @@ step had already finished.
 
 | Ampersand SSE | AI SDK stream part |
 | --- | --- |
-| `turn.item.added` function_call | `tool-input-start` |
-| `turn.item.done` function_call | `tool-input-delta` (full JSON), `tool-input-end`, `tool-call{providerMetadata.humansand}` |
+| `turn.item.added` function_call | `tool-input-start` (the live API sends complete `arguments` here and no `item.done` before `requires_action`) |
+| `turn.item.done` function_call | `tool-input-delta` (full JSON), `tool-input-end`, `tool-call{providerMetadata.humansand}`; skipped for calls this step answered (the API replays `item.done` once the result lands) |
 | `turn.output_text.delta` | `text-delta` (id = `item_id:content_index`, `text-start` on first) |
 | `turn.output_text.done` / `content_part.done` | `text-end{providerMetadata.humansand}` (whole text emitted if no deltas arrived) |
 | `turn.item.done` assistant message | closes any open text for that item |

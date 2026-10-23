@@ -96,7 +96,8 @@ export async function* translate(stream: EventStream, ctx: TranslateContext): As
   }
 
   function* emitCall(callId: string, name: string, args: unknown): Generator<LanguageModelV3StreamPart> {
-    if (emittedCalls.has(callId)) return
+    // The API replays `item.done` for a call once its result arrives; a call this step answered is not a new one.
+    if (emittedCalls.has(callId) || ctx.answered.has(callId)) return
     emittedCalls.add(callId)
     const input = JSON.stringify(args ?? {})
     if (!openCalls.has(callId)) yield { type: "tool-input-start", id: callId, toolName: name }
@@ -188,7 +189,7 @@ export async function* translate(stream: EventStream, ctx: TranslateContext): As
           if (isStale(event.turn_id)) break
           noteTurn(event.turn_id)
           const item = event.item
-          if (item.type === "function_call" && !emittedCalls.has(item.call_id)) {
+          if (item.type === "function_call" && !emittedCalls.has(item.call_id) && !ctx.answered.has(item.call_id)) {
             openCalls.add(item.call_id)
             yield { type: "tool-input-start", id: item.call_id, toolName: item.name }
           }

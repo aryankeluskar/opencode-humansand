@@ -9,7 +9,7 @@ harness) resends the full transcript on every model call. This package bridges t
 per OpenCode session, sends only what is new on each step, and recreates the session (replaying history) only when it
 has to.
 
-![OpenCode running Ampersand v0.1: it finds a failing test, fixes it, and reruns the suite](demo/demo.gif)
+![OpenCode running Ampersand v0.1: it finds a failing test, fixes it, and reruns the suite](https://raw.githubusercontent.com/aryankeluskar/opencode-humansand/main/demo/demo.gif)
 
 ```jsonc
 // opencode.json

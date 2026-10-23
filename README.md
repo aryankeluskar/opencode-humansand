@@ -9,6 +9,8 @@ harness) resends the full transcript on every model call. This package bridges t
 per OpenCode session, sends only what is new on each step, and recreates the session (replaying history) only when it
 has to.
 
+![OpenCode running Ampersand v0.1: it finds a failing test, fixes it, and reruns the suite](demo/demo.gif)
+
 ```jsonc
 // opencode.json
 { "plugins": ["opencode-humansand"] }
@@ -21,7 +23,7 @@ opencode run -m humansand/ampersand-v0.1 "what's in this repo?"
 
 ## Status
 
-- v0.1.0. Verified against a mock of the Agents API (19 tests), end to end inside OpenCode 2.1.3, and against the
+- v0.1.0. Verified against a mock of the Agents API (26 tests), end to end inside OpenCode 2.1.3, and against the
   live API (2026-10-22): session create, parallel tool calls, tool results posted as events, cancel of a waiting
   turn before new input, continued turns that rely on server-side memory, usage and cost.
 - If something differs from the published API reference, open an issue with `HUMANSAND_DEBUG_FILE` and

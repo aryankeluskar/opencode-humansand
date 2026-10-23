@@ -6,3 +6,6 @@ dist/
 .env.*
 *.log
 e2e/requests.jsonl
+
+# local launch notes (not part of the package)
+launch/

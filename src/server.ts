@@ -34,7 +34,11 @@ export interface PluginConfig {
   readonly titles?: "local" | "model"
 }
 
-/** First user text in an OpenCode request, trimmed to one line of at most `max` characters. */
+/**
+ * First user text in an OpenCode request, trimmed to one line of at most `max` characters. OpenCode frames the
+ * title request as `Here is the first message of the conversation: <message>…</message>` (or `<conversation>`);
+ * the framing is stripped so the title is the user's own words.
+ */
 export function localTitle(
   messages: ReadonlyArray<{ readonly role: string; readonly content: ReadonlyArray<{ readonly type: string; readonly text?: string | null | undefined }> }>,
   max = 80,
@@ -44,10 +48,10 @@ export function localTitle(
     const text = message.content
       .flatMap((part) => (part.type === "text" && typeof part.text === "string" ? [part.text] : []))
       .join(" ")
-      .replace(/\s+/g, " ")
-      .trim()
-    if (text.length === 0) continue
-    return text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`
+    const unwrapped = /<(message|conversation)>([\s\S]*?)<\/\1>/.exec(text)?.[2] ?? text
+    const line = unwrapped.replace(/\s+/g, " ").trim()
+    if (line.length === 0) continue
+    return line.length <= max ? line : `${line.slice(0, max - 1).trimEnd()}…`
   }
   return undefined
 }

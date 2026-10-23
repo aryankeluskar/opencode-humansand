@@ -1,4 +1,4 @@
-# PR description draft: `sst/models.dev`
+# PR description: `anomalyco/models.dev` (base `dev`, head `aryankeluskar:humansand-ampersand`)
 
 **Title:** Add humans& (Ampersand v0.1)
 
@@ -18,6 +18,9 @@ Facts and sources:
   tools frozen per session, no reasoning text returned: https://ampersand.humansand.ai/docs
 - Lab file `models/humansand/ampersand-v0.1.toml`; provider overrides in
   `providers/humansand/models/ampersand-v0.1.toml`.
-- `bun validate` and `bun run v1:check` pass locally.
+- `bun validate` passes locally; `bun run v1:check` reports the provider as an addition only (no changes to
+  existing v1 output). Not `v2_only`: OpenCode reads the v1 feed and maps `npm` to an `aisdk:` package.
+- Logo is the ampersand glyph from humans&'s own wordmark (humansand.ai/assets/site-wordmark.svg), `currentColor`.
 
-(Fill in before opening: release date and knowledge cutoff confirmed with humans&, official logo.)
+(Before opening: `opencode-humansand` must be on npm, otherwise OpenCode cannot install the package the entry
+names. Knowledge cutoff is not published and is omitted.)

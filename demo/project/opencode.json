@@ -1,0 +1,5 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugins": ["file:///Users/aryank/Developer/opencode-humansand"],
+  "model": "humansand/ampersand-v0.1"
+}
